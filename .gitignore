@@ -1,0 +1,9 @@
+# for C/C++
+*.o
+*.obj
+
+# for Windows
+*.exe
+
+# for Linux
+a.out
