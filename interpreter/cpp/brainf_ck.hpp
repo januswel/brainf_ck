@@ -23,8 +23,61 @@
 
 namespace lang {
     namespace brainf_ck {
-        typedef std::vector<char> instructions_type;
+        // operator definitions
+        enum operator_type {
+            ADD_CONTENT,        // +-
+            ADD_POINTER,        // <>
+            OUTPUT_CONTENT,     // .
+            INPUT_CONTENT,      // ,
+            LOOP_START,         // [
+            LOOP_END            // ]
+        };
 
+        std::ostream&
+        operator<<(std::ostream& out, const operator_type& op) {
+            switch (op) {
+                case ADD_CONTENT:
+                    out << "ADD_CONTENT"; break;
+                case ADD_POINTER:
+                    out << "ADD_POINTER"; break;
+                case OUTPUT_CONTENT:
+                    out << "OUTPUT_CONTENT"; break;
+                case INPUT_CONTENT:
+                    out << "INPUT_CONTENT"; break;
+                case LOOP_START:
+                    out << "LOOP_START"; break;
+                case LOOP_END:
+                    out << "LOOP_END"; break;
+            }
+            return out;
+        }
+
+        // operand definition
+        typedef int operand_type;
+
+        // instruction definition
+        struct instruction_type {
+            operator_type op;
+            operand_type operand;
+        };
+
+        std::ostream&
+        operator<<(std::ostream& out, const instruction_type& i) {
+            return out << i.op << "\t" << i.operand << "\n";
+        }
+
+        // array of instructions definition
+        typedef std::vector<instruction_type> instructions_type;
+
+        std::ostream&
+        operator<<(std::ostream& out, const instructions_type& i) {
+            std::copy(
+                    i.begin(), i.end(),
+                    std::ostream_iterator<instruction_type>(out));
+            return out;
+        }
+
+        // class parser definitions
         class parser {
             public:
                 enum state_type {
@@ -60,10 +113,50 @@ namespace lang {
                 }
 
                 bool parse(std::istream& in) {
-                    std::copy(
-                            std::istream_iterator<char>(in),
-                            std::istream_iterator<char>(),
-                            std::back_inserter(pv_instructions));
+                    char c;
+                    operand_type p = 0;
+                    operand_type n = 0;
+                    while (in.good()) {
+                        in.get(c);
+                        switch (c) {
+                            case '>':
+                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
+                                ++p;
+                                break;
+                            case '<':
+                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
+                                --p;
+                                break;
+                            case '+':
+                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                ++n;
+                                break;
+                            case '-':
+                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                --n;
+                                break;
+                            case '.':
+                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
+                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                generate_instruction(OUTPUT_CONTENT, 0);
+                                break;
+                            case ',':
+                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
+                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                generate_instruction(INPUT_CONTENT, 0);
+                                break;
+                            case '[':
+                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
+                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                generate_instruction(LOOP_START, 0);
+                                break;
+                            case ']':
+                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
+                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                generate_instruction(LOOP_END, 0);
+                                break;
+                        }
+                    }
                     pv_state = OK;
                     return true;
                 }
@@ -71,8 +164,15 @@ namespace lang {
                 const instructions_type& instructions(void) const {
                     return pv_instructions;
                 }
+
+            protected:
+                void generate_instruction(operator_type op, operand_type operand) {
+                    instruction_type inst = {op, operand};
+                    pv_instructions.push_back(inst);
+                }
         };
 
+        // class executer definitions
         class executer {
             public:
                 typedef instructions_type::const_iterator programcounter_type;
@@ -95,44 +195,48 @@ namespace lang {
                     for (   programcounter_type pc = insts.begin();
                             pc != insts.end();
                             ++pc) {
-                        switch (*pc) {
-                            case '>':   ++ptr; break;
-                            case '<':   --ptr; break;
-                            case '+':   ++(*ptr); break;
-                            case '-':   --(*ptr); break;
-                            case '.':   out->put(*ptr); break;
-                            case ',':   in->get(*ptr); break;
-                            case '[':   if (*ptr == 0) {
-                                            unsigned int nest = 1;
-                                            while (nest != 0) {
-                                                switch (*++pc) {
-                                                    case '[':   ++nest; break;
-                                                    case ']':   --nest; break;
-                                                }
-                                            }
+                        switch (pc->op) {
+                            case ADD_CONTENT:
+                                *ptr += static_cast<char>(pc->operand);
+                                break;
+                            case ADD_POINTER:
+                                ptr += pc->operand;
+                                break;
+                            case OUTPUT_CONTENT:
+                                out->put(*ptr);
+                                break;
+                            case INPUT_CONTENT:
+                                in->get(*ptr);
+                                break;
+                            case LOOP_START:
+                                if (*ptr == 0) {
+                                    unsigned int nest = 1;
+                                    while (nest != 0) {
+                                        switch ((++pc)->op) {
+                                            case LOOP_START:    ++nest; break;
+                                            case LOOP_END:      --nest; break;
+                                            default:            break;
                                         }
-                                        break;
-                            case ']':   if (*ptr != 0) {
-                                            unsigned int nest = 1;
-                                            while (nest != 0) {
-                                                switch (*--pc) {
-                                                    case '[':   --nest; break;
-                                                    case ']':   ++nest; break;
-                                                }
-                                            }
+                                    }
+                                }
+                                break;
+                            case LOOP_END:
+                                if (*ptr != 0) {
+                                    unsigned int nest = 1;
+                                    while (nest != 0) {
+                                        switch ((--pc)->op) {
+                                            case LOOP_START:    --nest; break;
+                                            case LOOP_END:      ++nest; break;
+                                            default:            break;
                                         }
-                                        break;
+                                    }
+                                }
+                                break;
                         }
                     }
                 }
         };
     }
-}
-
-std::ostream&
-operator<<(std::ostream& out, const lang::brainf_ck::instructions_type& i) {
-    std::copy(i.begin(), i.end(), std::ostream_iterator<char>(out));
-    return out;
 }
 
 #endif // BRAINF_CK_HPP
