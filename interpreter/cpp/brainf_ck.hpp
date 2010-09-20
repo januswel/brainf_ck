@@ -15,11 +15,12 @@
 #ifndef BRAINF_CK_HPP
 #define BRAINF_CK_HPP
 
+#include <algorithm>
 #include <iostream>
+#include <iterator>
+#include <stack>
 #include <string>
 #include <vector>
-#include <algorithm>
-#include <iterator>
 
 namespace lang {
     namespace brainf_ck {
@@ -85,6 +86,9 @@ namespace lang {
                     PARSE_FAILED
                 };
 
+                typedef instructions_type::size_type position_type;
+                typedef int distance_type;
+
             private:
                 instructions_type pv_instructions;
 
@@ -116,6 +120,7 @@ namespace lang {
                     char c;
                     operand_type p = 0;
                     operand_type n = 0;
+                    std::stack<position_type> loop_stack;
                     while (in.good()) {
                         in.get(c);
                         switch (c) {
@@ -148,12 +153,25 @@ namespace lang {
                             case '[':
                                 if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
                                 if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                // Save the position of '['.
+                                loop_stack.push(pv_instructions.size());
+                                // An operand 0 is temporary. It is rewritten
+                                // by processing corresponding ']' later.
                                 generate_instruction(LOOP_START, 0);
                                 break;
                             case ']':
                                 if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
                                 if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
-                                generate_instruction(LOOP_END, 0);
+                                // Get the position of corresponding '['.
+                                position_type loop_start = loop_stack.top();
+                                loop_stack.pop();
+                                // Calculate a distance of '[' and ']'.
+                                distance_type distance = pv_instructions.size() - loop_start;
+                                // Rewrite the operand of '['.
+                                pv_instructions[loop_start].operand = distance;
+                                // A value of operand is the distance from ']'
+                                // to the precedent of corresponding '['.
+                                generate_instruction(LOOP_END, -1 - distance);
                                 break;
                         }
                     }
@@ -210,26 +228,12 @@ namespace lang {
                                 break;
                             case LOOP_START:
                                 if (*ptr == 0) {
-                                    unsigned int nest = 1;
-                                    while (nest != 0) {
-                                        switch ((++pc)->op) {
-                                            case LOOP_START:    ++nest; break;
-                                            case LOOP_END:      --nest; break;
-                                            default:            break;
-                                        }
-                                    }
+                                    std::advance(pc, pc->operand);
                                 }
                                 break;
                             case LOOP_END:
                                 if (*ptr != 0) {
-                                    unsigned int nest = 1;
-                                    while (nest != 0) {
-                                        switch ((--pc)->op) {
-                                            case LOOP_START:    --nest; break;
-                                            case LOOP_END:      ++nest; break;
-                                            default:            break;
-                                        }
-                                    }
+                                    std::advance(pc, pc->operand);
                                 }
                                 break;
                         }
