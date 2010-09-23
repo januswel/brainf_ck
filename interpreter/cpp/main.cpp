@@ -36,8 +36,16 @@ int main(const int argc, const char* const argv[]) {
         << p.instructions()
         << std::endl;
 
-    executer e;
-    e.execute(p.instructions());
+    try {
+        executer e;
+        e.execute(p.instructions());
+    }
+    catch (std::exception& ex) {
+        std::cerr
+            << "execution error: "
+            << ex.what()
+            << std::endl;
+    }
 
     std::cout << std::endl;
 

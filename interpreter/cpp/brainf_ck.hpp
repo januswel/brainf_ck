@@ -170,6 +170,10 @@ namespace lang {
                                 GEN_INST(ADD_CONTENT, n);
                                 GEN_INST(ADD_POINTER, p);
 
+                                if (loop_stack.size() == 0) {
+                                    throw std::runtime_error("Found extra ]");
+                                }
+
                                 // Get the position of corresponding '['.
                                 position_type loop_start = loop_stack.top();
                                 loop_stack.pop();
@@ -186,6 +190,10 @@ namespace lang {
 
                     GEN_INST(ADD_CONTENT, n);
                     GEN_INST(ADD_POINTER, p);
+
+                    if (loop_stack.size() != 0) {
+                        throw std::runtime_error("Found extra [");
+                    }
 
                     pv_state = OK;
                     return true;
@@ -221,6 +229,8 @@ namespace lang {
                 void execute(const instructions_type& insts) {
                     std::vector<char> memory(MEMORY_SIZE);
                     char* ptr = &memory[0];
+                    const char* const start = ptr;
+                    const char* const end = &memory[MEMORY_SIZE - 1];
 
                     for (   programcounter_type pc = insts.begin();
                             pc != insts.end();
@@ -231,6 +241,9 @@ namespace lang {
                                 break;
                             case ADD_POINTER:
                                 ptr += pc->operand;
+                                if (ptr < start || end < ptr) {
+                                    throw std::runtime_error("memory access violation");
+                                }
                                 break;
                             case OUTPUT_CONTENT:
                                 out->put(*ptr);
