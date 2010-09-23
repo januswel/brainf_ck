@@ -21,6 +21,7 @@
 #include <stack>
 #include <string>
 #include <vector>
+#include <stdexcept>
 
 namespace lang {
     namespace brainf_ck {
@@ -78,6 +79,12 @@ namespace lang {
             return out;
         }
 
+#define GEN_INST(OPERATOR, OPERAND)                     \
+        if (OPERAND != 0) {                             \
+            generate_instruction(OPERATOR, OPERAND);    \
+            OPERAND = 0;                                \
+        }
+
         // class parser definitions
         class parser {
             public:
@@ -125,34 +132,34 @@ namespace lang {
                         in.get(c);
                         switch (c) {
                             case '>':
-                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
+                                GEN_INST(ADD_CONTENT, n);
                                 ++p;
                                 break;
                             case '<':
-                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
+                                GEN_INST(ADD_CONTENT, n);
                                 --p;
                                 break;
                             case '+':
-                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                GEN_INST(ADD_POINTER, p);
                                 ++n;
                                 break;
                             case '-':
-                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                GEN_INST(ADD_POINTER, p);
                                 --n;
                                 break;
                             case '.':
-                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
-                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                GEN_INST(ADD_CONTENT, n);
+                                GEN_INST(ADD_POINTER, p);
                                 generate_instruction(OUTPUT_CONTENT, 0);
                                 break;
                             case ',':
-                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
-                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                GEN_INST(ADD_CONTENT, n);
+                                GEN_INST(ADD_POINTER, p);
                                 generate_instruction(INPUT_CONTENT, 0);
                                 break;
                             case '[':
-                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
-                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                GEN_INST(ADD_CONTENT, n);
+                                GEN_INST(ADD_POINTER, p);
                                 // Save the position of '['.
                                 loop_stack.push(pv_instructions.size());
                                 // An operand 0 is temporary. It is rewritten
@@ -160,8 +167,9 @@ namespace lang {
                                 generate_instruction(LOOP_START, 0);
                                 break;
                             case ']':
-                                if (n != 0) { generate_instruction(ADD_CONTENT, n); n = 0; }
-                                if (p != 0) { generate_instruction(ADD_POINTER, p); p = 0; }
+                                GEN_INST(ADD_CONTENT, n);
+                                GEN_INST(ADD_POINTER, p);
+
                                 // Get the position of corresponding '['.
                                 position_type loop_start = loop_stack.top();
                                 loop_stack.pop();
@@ -175,6 +183,10 @@ namespace lang {
                                 break;
                         }
                     }
+
+                    GEN_INST(ADD_CONTENT, n);
+                    GEN_INST(ADD_POINTER, p);
+
                     pv_state = OK;
                     return true;
                 }
